@@ -1,0 +1,1427 @@
+// modules/scan_details/views/scan_details_view.dart
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:get/get.dart';
+import 'package:intl/intl.dart';
+import '../controllers/scan_details_controller.dart';
+
+class ScanDetailsView extends GetView<ScanDetailsController> {
+  const ScanDetailsView({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Scan Details',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+          ),
+        ),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Get.back(),
+        ),
+        elevation: 0,
+        backgroundColor: Colors.white,
+      ),
+      body: Obx(() {
+        if (controller.isLoading.value) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (controller.scanResult.value == null) {
+          return _buildErrorState();
+        }
+        return _buildScanDetails();
+      }),
+      bottomNavigationBar: Obx(() {
+        if (controller.scanResult.value == null) {
+          return const SizedBox.shrink();
+        }
+        return _buildActionButtons();
+      }),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildActionButton(
+            icon: Icons.share,
+            label: 'Share',
+            onTap: controller.shareScan,
+          ),
+          _buildActionButton(
+            icon: Icons.copy,
+            label: 'Copy',
+            onTap: controller.copyToClipboard,
+          ),
+          _buildActionButton(
+            icon: Icons.delete,
+            label: 'Delete',
+            onTap: _showDeleteConfirmation,
+            color: Colors.red,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color color = Colors.black87,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Scan not found',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'The scan you are looking for does not exist',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[500],
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () => Get.back(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('Go Back'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScanDetails() {
+    final scan = controller.scanResult.value!;
+    final dateFormat = DateFormat('MMMM d, yyyy • h:mm a');
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.access_time, size: 16, color: Colors.grey),
+                const SizedBox(width: 8),
+                Text(
+                  dateFormat.format(scan.timestamp),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          if (scan.imagePath != null && File(scan.imagePath!).existsSync())
+            _buildImagePreview(scan.imagePath!)
+          else
+            _buildNoImageState(),
+          if (scan.barcodes.isEmpty)
+            _buildNoBarcodeState()
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: scan.barcodes.length,
+              itemBuilder: (context, index) {
+                final barcode = scan.barcodes[index];
+                if (controller.isVCard(barcode.value)) {
+                  return _buildVCardItem(barcode.value, barcode.format);
+                }
+                return _buildBarcodeItem(barcode.value, barcode.format);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImagePreview(String imagePath) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.file(
+                File(imagePath),
+                width: double.infinity,
+                height: 200,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  print('Image load error: $error');
+                  return Container(
+                    width: double.infinity,
+                    height: 200,
+                    color: Colors.grey[200],
+                    child: const Center(
+                      child: Icon(
+                        Icons.broken_image,
+                        size: 48,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Positioned(
+              bottom: 8,
+              right: 8,
+              child: Obx(() {
+                if (controller.isSavingToGallery.value) {
+                  return Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    ),
+                  );
+                }
+                return GestureDetector(
+                  onTap: () => controller.saveImageToGallery(imagePath),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Save to Gallery',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildNoImageState() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      width: double.infinity,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.image_not_supported,
+            size: 48,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No image captured',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoBarcodeState() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      width: double.infinity,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.qr_code_scanner,
+            size: 48,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No barcodes detected',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBarcodeItem(String value, String format) {
+    final iconData = controller.getBarcodeIcon(value, format);
+    final isUrl = controller.isUrl(value);
+    final isPhone = controller.isPhoneNumber(value);
+    final isWifi = controller.isWifi(value);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    iconData,
+                    color: Colors.red,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    format.replaceAll('BarcodeFormat.', '').toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (isUrl)
+              _buildUrlContent(value)
+            else if (isPhone)
+              _buildPhoneContent(value)
+            else if (isWifi)
+              _buildWifiContent(value)
+            else
+              _buildDefaultContent(value),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVCardItem(String value, String format) {
+    final vCardData = controller.parseVCard(value);
+    final iconData = controller.getBarcodeIcon(value, format);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    iconData,
+                    color: Colors.red,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Contact (vCard)',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (vCardData.containsKey('name'))
+              _buildVCardField('Name', vCardData['name']!),
+            if (vCardData.containsKey('organization'))
+              _buildVCardField('Organization', vCardData['organization']!),
+            if (vCardData.containsKey('title'))
+              _buildVCardField('Title', vCardData['title']!),
+            if (vCardData.containsKey('address'))
+              _buildVCardField('Address', vCardData['address']!),
+            if (vCardData.containsKey('phone'))
+              _buildPhoneContent(vCardData['phone']!),
+            if (vCardData.containsKey('email'))
+              _buildVCardField('Email', vCardData['email']!, isEmail: true),
+            if (vCardData.containsKey('url'))
+              _buildUrlContent(vCardData['url']!),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVCardField(String label, String value, {bool isEmail = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: isEmail ? () => controller.openUrl('mailto:$value') : null,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: isEmail ? Colors.blue : Colors.black87,
+                decoration: isEmail ? TextDecoration.underline : null,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDefaultContent(String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Value',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUrlContent(String url) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Website Link',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () => controller.openUrl(url),
+          child: Text(
+            url,
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.blue,
+              decoration: TextDecoration.underline,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPhoneContent(String phone) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Phone Number',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () => controller.dialPhone(phone),
+          child: Text(
+            phone,
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.blue,
+              decoration: TextDecoration.underline,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWifiContent(String wifiData) {
+    final wifiInfo = controller.parseWifiQR(wifiData);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'WiFi Network',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (wifiInfo.containsKey('ssid') && wifiInfo['ssid']!.isNotEmpty)
+          _buildWifiInfoRow('Network Name (SSID)', wifiInfo['ssid']!),
+        if (wifiInfo.containsKey('type') && wifiInfo['type']!.isNotEmpty)
+          _buildWifiInfoRow('Security Type', wifiInfo['type']!),
+        if (wifiInfo.containsKey('password') && wifiInfo['password']!.isNotEmpty)
+          _buildWifiPasswordRow('Password', wifiInfo['password']!),
+      ],
+    );
+  }
+
+  Widget _buildWifiInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Text(
+            '$label: ',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWifiPasswordRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$label: ',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    value,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: value));
+                  Get.snackbar(
+                    'Copied',
+                    'Password copied to clipboard',
+                    snackPosition: SnackPosition.BOTTOM,
+                    duration: const Duration(seconds: 2),
+                  );
+                },
+                icon: const Icon(Icons.copy, size: 16),
+                label: const Text('Copy'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation() {
+    showDialog(
+      context: Get.context!,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Scan'),
+          content: const Text('Are you sure you want to delete this scan? This action cannot be undone.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                controller.deleteScan();
+              },
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// // modules/scan_details/views/scan_details_view.dart
+// import 'dart:io';
+// import 'package:flutter/material.dart';
+// import 'package:flutter/services.dart';
+// import 'package:get/get.dart';
+// import 'package:intl/intl.dart';
+// import '../controllers/scan_details_controller.dart';
+
+// class ScanDetailsView extends GetView<ScanDetailsController> {
+//   const ScanDetailsView({Key? key}) : super(key: key);
+
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: const Text(
+//           'Scan Details',
+//           style: TextStyle(
+//             fontSize: 22,
+//             fontWeight: FontWeight.bold,
+//             color: Colors.black,
+//           ),
+//         ),
+//         centerTitle: true,
+//         leading: IconButton(
+//           icon: const Icon(Icons.arrow_back, color: Colors.black),
+//           onPressed: () => Get.back(),
+//         ),
+//         elevation: 0,
+//         backgroundColor: Colors.white,
+//       ),
+//       body: Obx(() {
+//         if (controller.isLoading.value) {
+//           return const Center(child: CircularProgressIndicator());
+//         }
+//         if (controller.scanResult.value == null) {
+//           return _buildErrorState();
+//         }
+//         return _buildScanDetails();
+//       }),
+//       bottomNavigationBar: Obx(() {
+//         if (controller.scanResult.value == null) {
+//           return const SizedBox.shrink();
+//         }
+//         return _buildActionButtons();
+//       }),
+//     );
+//   }
+
+//   Widget _buildActionButtons() {
+//     return Container(
+//       padding: const EdgeInsets.all(16),
+//       decoration: BoxDecoration(
+//         color: Colors.white,
+//         boxShadow: [
+//           BoxShadow(
+//             color: Colors.grey.withOpacity(0.2),
+//             blurRadius: 10,
+//             offset: const Offset(0, -5),
+//           ),
+//         ],
+//       ),
+//       child: Row(
+//         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+//         children: [
+//           _buildActionButton(
+//             icon: Icons.share,
+//             label: 'Share',
+//             onTap: controller.shareScan,
+//           ),
+//           _buildActionButton(
+//             icon: Icons.copy,
+//             label: 'Copy',
+//             onTap: controller.copyToClipboard,
+//           ),
+//           _buildActionButton(
+//             icon: Icons.delete,
+//             label: 'Delete',
+//             onTap: _showDeleteConfirmation,
+//             color: Colors.red,
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _buildActionButton({
+//     required IconData icon,
+//     required String label,
+//     required VoidCallback onTap,
+//     Color color = Colors.black87,
+//   }) {
+//     return InkWell(
+//       onTap: onTap,
+//       borderRadius: BorderRadius.circular(8),
+//       child: Padding(
+//         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+//         child: Column(
+//           mainAxisSize: MainAxisSize.min,
+//           children: [
+//             Icon(icon, color: color, size: 24),
+//             const SizedBox(height: 4),
+//             Text(
+//               label,
+//               style: TextStyle(
+//                 color: color,
+//                 fontSize: 12,
+//                 fontWeight: FontWeight.w500,
+//               ),
+//             ),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _buildErrorState() {
+//     return Center(
+//       child: Column(
+//         mainAxisAlignment: MainAxisAlignment.center,
+//         children: [
+//           Icon(
+//             Icons.error_outline,
+//             size: 64,
+//             color: Colors.grey[400],
+//           ),
+//           const SizedBox(height: 16),
+//           Text(
+//             'Scan not found',
+//             style: TextStyle(
+//               fontSize: 18,
+//               fontWeight: FontWeight.w500,
+//               color: Colors.grey[600],
+//             ),
+//           ),
+//           const SizedBox(height: 8),
+//           Text(
+//             'The scan you are looking for does not exist',
+//             style: TextStyle(
+//               fontSize: 16,
+//               color: Colors.grey[500],
+//             ),
+//             textAlign: TextAlign.center,
+//           ),
+//           const SizedBox(height: 24),
+//           ElevatedButton(
+//             onPressed: () => Get.back(),
+//             style: ElevatedButton.styleFrom(
+//               backgroundColor: Colors.red,
+//               foregroundColor: Colors.white,
+//               shape: RoundedRectangleBorder(
+//                 borderRadius: BorderRadius.circular(8),
+//               ),
+//             ),
+//             child: const Text('Go Back'),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _buildScanDetails() {
+//     final scan = controller.scanResult.value!;
+//     final dateFormat = DateFormat('MMMM d, yyyy • h:mm a');
+
+//     return SingleChildScrollView(
+//       padding: const EdgeInsets.all(16),
+//       child: Column(
+//         crossAxisAlignment: CrossAxisAlignment.start,
+//         children: [
+//           Container(
+//             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+//             decoration: BoxDecoration(
+//               color: Colors.grey[100],
+//               borderRadius: BorderRadius.circular(8),
+//             ),
+//             child: Row(
+//               mainAxisSize: MainAxisSize.min,
+//               children: [
+//                 const Icon(Icons.access_time, size: 16, color: Colors.grey),
+//                 const SizedBox(width: 8),
+//                 Text(
+//                   dateFormat.format(scan.timestamp),
+//                   style: TextStyle(
+//                     fontSize: 14,
+//                     color: Colors.grey[700],
+//                   ),
+//                 ),
+//               ],
+//             ),
+//           ),
+//           const SizedBox(height: 24),
+//           if (scan.imagePath != null && File(scan.imagePath!).existsSync())
+//             _buildImagePreview(scan.imagePath!)
+//           else
+//             _buildNoImageState(),
+//           if (scan.barcodes.isEmpty)
+//             _buildNoBarcodeState()
+//           else
+//             ListView.builder(
+//               shrinkWrap: true,
+//               physics: const NeverScrollableScrollPhysics(),
+//               itemCount: scan.barcodes.length,
+//               itemBuilder: (context, index) {
+//                 final barcode = scan.barcodes[index];
+//                 if (controller.isVCard(barcode.value)) {
+//                   return _buildVCardItem(barcode.value, barcode.format);
+//                 }
+//                 return _buildBarcodeItem(barcode.value, barcode.format);
+//               },
+//             ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _buildImagePreview(String imagePath) {
+//     return Column(
+//       crossAxisAlignment: CrossAxisAlignment.start,
+//       children: [
+//         Stack(
+//           children: [
+//             ClipRRect(
+//               borderRadius: BorderRadius.circular(12),
+//               child: Image.file(
+//                 File(imagePath),
+//                 width: double.infinity,
+//                 height: 200,
+//                 fit: BoxFit.cover,
+//                 errorBuilder: (context, error, stackTrace) {
+//                   print('Image load error: $error');
+//                   return Container(
+//                     width: double.infinity,
+//                     height: 200,
+//                     color: Colors.grey[200],
+//                     child: const Center(
+//                       child: Icon(
+//                         Icons.broken_image,
+//                         size: 48,
+//                         color: Colors.grey,
+//                       ),
+//                     ),
+//                   );
+//                 },
+//               ),
+//             ),
+//             Positioned(
+//               bottom: 8,
+//               right: 8,
+//               child: Obx(() {
+//                 if (controller.isSavingToGallery.value) {
+//                   return Container(
+//                     padding: const EdgeInsets.all(8),
+//                     decoration: BoxDecoration(
+//                       color: Colors.black.withOpacity(0.6),
+//                       borderRadius: BorderRadius.circular(8),
+//                     ),
+//                     child: const SizedBox(
+//                       width: 20,
+//                       height: 20,
+//                       child: CircularProgressIndicator(
+//                         strokeWidth: 2,
+//                         color: Colors.white,
+//                       ),
+//                     ),
+//                   );
+//                 }
+//                 return GestureDetector(
+//                   onTap: () => controller.saveImageToGallery(imagePath),
+//                   child: Container(
+//                     padding: const EdgeInsets.all(8),
+//                     decoration: BoxDecoration(
+//                       color: Colors.black.withOpacity(0.6),
+//                       borderRadius: BorderRadius.circular(8),
+//                     ),
+//                     child: const Text(
+//                       'Save to Gallery',
+//                       style: TextStyle(
+//                         color: Colors.white,
+//                         fontSize: 12,
+//                       ),
+//                     ),
+//                   ),
+//                 );
+//               }),
+//             ),
+//           ],
+//         ),
+//         const SizedBox(height: 24),
+//       ],
+//     );
+//   }
+
+//   Widget _buildNoImageState() {
+//     return Container(
+//       padding: const EdgeInsets.symmetric(vertical: 24),
+//       width: double.infinity,
+//       child: Column(
+//         mainAxisAlignment: MainAxisAlignment.center,
+//         children: [
+//           Icon(
+//             Icons.image_not_supported,
+//             size: 48,
+//             color: Colors.grey[400],
+//           ),
+//           const SizedBox(height: 16),
+//           Text(
+//             'No image captured',
+//             style: TextStyle(
+//               fontSize: 16,
+//               fontWeight: FontWeight.w500,
+//               color: Colors.grey[600],
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _buildNoBarcodeState() {
+//     return Container(
+//       padding: const EdgeInsets.symmetric(vertical: 24),
+//       width: double.infinity,
+//       child: Column(
+//         mainAxisAlignment: MainAxisAlignment.center,
+//         children: [
+//           Icon(
+//             Icons.qr_code_scanner,
+//             size: 48,
+//             color: Colors.grey[400],
+//           ),
+//           const SizedBox(height: 16),
+//           Text(
+//             'No barcodes detected',
+//             style: TextStyle(
+//               fontSize: 16,
+//               fontWeight: FontWeight.w500,
+//               color: Colors.grey[600],
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _buildBarcodeItem(String value, String format) {
+//     final iconData = controller.getBarcodeIcon(value, format);
+//     final isUrl = controller.isUrl(value);
+//     final isPhone = controller.isPhoneNumber(value);
+//     final isWifi = controller.isWifi(value);
+
+//     return Card(
+//       margin: const EdgeInsets.only(bottom: 16),
+//       elevation: 3,
+//       shape: RoundedRectangleBorder(
+//         borderRadius: BorderRadius.circular(12),
+//       ),
+//       child: Padding(
+//         padding: const EdgeInsets.all(16.0),
+//         child: Column(
+//           crossAxisAlignment: CrossAxisAlignment.start,
+//           children: [
+//             Row(
+//               children: [
+//                 Container(
+//                   width: 40,
+//                   height: 40,
+//                   decoration: BoxDecoration(
+//                     color: Colors.red.withOpacity(0.1),
+//                     borderRadius: BorderRadius.circular(8),
+//                   ),
+//                   child: Icon(
+//                     iconData,
+//                     color: Colors.red,
+//                     size: 24,
+//                   ),
+//                 ),
+//                 const SizedBox(width: 12),
+//                 Expanded(
+//                   child: Text(
+//                     format.replaceAll('BarcodeFormat.', '').toUpperCase(),
+//                     style: TextStyle(
+//                       fontSize: 14,
+//                       fontWeight: FontWeight.bold,
+//                       color: Colors.grey[800],
+//                     ),
+//                   ),
+//                 ),
+//               ],
+//             ),
+//             const SizedBox(height: 16),
+//             if (isUrl)
+//               _buildUrlContent(value)
+//             else if (isPhone)
+//               _buildPhoneContent(value)
+//             else if (isWifi)
+//               _buildWifiContent(value)
+//             else
+//               _buildDefaultContent(value),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _buildVCardItem(String value, String format) {
+//     final vCardData = controller.parseVCard(value);
+//     final iconData = controller.getBarcodeIcon(value, format);
+
+//     return Card(
+//       margin: const EdgeInsets.only(bottom: 16),
+//       elevation: 3,
+//       shape: RoundedRectangleBorder(
+//         borderRadius: BorderRadius.circular(12),
+//       ),
+//       child: Padding(
+//         padding: const EdgeInsets.all(16.0),
+//         child: Column(
+//           crossAxisAlignment: CrossAxisAlignment.start,
+//           children: [
+//             Row(
+//               children: [
+//                 Container(
+//                   width: 40,
+//                   height: 40,
+//                   decoration: BoxDecoration(
+//                     color: Colors.red.withOpacity(0.1),
+//                     borderRadius: BorderRadius.circular(8),
+//                   ),
+//                   child: Icon(
+//                     iconData,
+//                     color: Colors.red,
+//                     size: 24,
+//                   ),
+//                 ),
+//                 const SizedBox(width: 12),
+//                 Expanded(
+//                   child: Text(
+//                     'Contact (vCard)',
+//                     style: TextStyle(
+//                       fontSize: 14,
+//                       fontWeight: FontWeight.bold,
+//                       color: Colors.grey[800],
+//                     ),
+//                   ),
+//                 ),
+//               ],
+//             ),
+//             const SizedBox(height: 16),
+//             if (vCardData.containsKey('name'))
+//               _buildVCardField('Name', vCardData['name']!),
+//             if (vCardData.containsKey('organization'))
+//               _buildVCardField('Organization', vCardData['organization']!),
+//             if (vCardData.containsKey('title'))
+//               _buildVCardField('Title', vCardData['title']!),
+//             if (vCardData.containsKey('address'))
+//               _buildVCardField('Address', vCardData['address']!),
+//             if (vCardData.containsKey('phone'))
+//               _buildPhoneContent(vCardData['phone']!),
+//             if (vCardData.containsKey('email'))
+//               _buildVCardField('Email', vCardData['email']!, isEmail: true),
+//             if (vCardData.containsKey('url'))
+//               _buildUrlContent(vCardData['url']!),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _buildVCardField(String label, String value, {bool isEmail = false}) {
+//     return Padding(
+//       padding: const EdgeInsets.only(bottom: 8),
+//       child: Column(
+//         crossAxisAlignment: CrossAxisAlignment.start,
+//         children: [
+//           Text(
+//             label,
+//             style: TextStyle(
+//               fontSize: 14,
+//               color: Colors.grey[600],
+//               fontWeight: FontWeight.w500,
+//             ),
+//           ),
+//           const SizedBox(height: 4),
+//           GestureDetector(
+//             onTap: isEmail ? () => controller.openUrl('mailto:$value') : null,
+//             child: Text(
+//               value,
+//               style: TextStyle(
+//                 fontSize: 16,
+//                 fontWeight: FontWeight.w500,
+//                 color: isEmail ? Colors.blue : Colors.black87,
+//                 decoration: isEmail ? TextDecoration.underline : null,
+//               ),
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _buildDefaultContent(String value) {
+//     return Column(
+//       crossAxisAlignment: CrossAxisAlignment.start,
+//       children: [
+//         Text(
+//           'Value',
+//           style: TextStyle(
+//             fontSize: 14,
+//             color: Colors.grey[600],
+//             fontWeight: FontWeight.w500,
+//           ),
+//         ),
+//         const SizedBox(height: 8),
+//         Text(
+//           value,
+//           style: const TextStyle(
+//             fontSize: 16,
+//             fontWeight: FontWeight.w500,
+//             color: Colors.black87,
+//           ),
+//         ),
+//       ],
+//     );
+//   }
+
+//   Widget _buildUrlContent(String url) {
+//     return Column(
+//       crossAxisAlignment: CrossAxisAlignment.start,
+//       children: [
+//         Text(
+//           'Website Link',
+//           style: TextStyle(
+//             fontSize: 14,
+//             color: Colors.grey[600],
+//             fontWeight: FontWeight.w500,
+//           ),
+//         ),
+//         const SizedBox(height: 8),
+//         GestureDetector(
+//           onTap: () => controller.openUrl(url),
+//           child: Text(
+//             url,
+//             style: const TextStyle(
+//               fontSize: 16,
+//               color: Colors.blue,
+//               decoration: TextDecoration.underline,
+//               fontWeight: FontWeight.w500,
+//             ),
+//           ),
+//         ),
+//       ],
+//     );
+//   }
+
+//   Widget _buildPhoneContent(String phone) {
+//     return Column(
+//       crossAxisAlignment: CrossAxisAlignment.start,
+//       children: [
+//         Text(
+//           'Phone Number',
+//           style: TextStyle(
+//             fontSize: 14,
+//             color: Colors.grey[600],
+//             fontWeight: FontWeight.w500,
+//           ),
+//         ),
+//         const SizedBox(height: 8),
+//         GestureDetector(
+//           onTap: () => controller.dialPhone(phone),
+//           child: Text(
+//             phone,
+//             style: const TextStyle(
+//               fontSize: 16,
+//               color: Colors.blue,
+//               decoration: TextDecoration.underline,
+//               fontWeight: FontWeight.w500,
+//             ),
+//           ),
+//         ),
+//       ],
+//     );
+//   }
+
+//   Widget _buildWifiContent(String wifiData) {
+//     final wifiInfo = controller.parseWifiQR(wifiData);
+//     return Column(
+//       crossAxisAlignment: CrossAxisAlignment.start,
+//       children: [
+//         Text(
+//           'WiFi Network',
+//           style: TextStyle(
+//             fontSize: 14,
+//             color: Colors.grey[600],
+//             fontWeight: FontWeight.w500,
+//           ),
+//         ),
+//         const SizedBox(height: 8),
+//         if (wifiInfo.containsKey('ssid') && wifiInfo['ssid']!.isNotEmpty)
+//           _buildWifiInfoRow('Network Name (SSID)', wifiInfo['ssid']!),
+//         if (wifiInfo.containsKey('type') && wifiInfo['type']!.isNotEmpty)
+//           _buildWifiInfoRow('Security Type', wifiInfo['type']!),
+//         if (wifiInfo.containsKey('password') && wifiInfo['password']!.isNotEmpty)
+//           _buildWifiPasswordRow('Password', wifiInfo['password']!),
+//       ],
+//     );
+//   }
+
+//   Widget _buildWifiInfoRow(String label, String value) {
+//     return Padding(
+//       padding: const EdgeInsets.only(bottom: 8),
+//       child: Row(
+//         children: [
+//           Text(
+//             '$label: ',
+//             style: const TextStyle(
+//               fontWeight: FontWeight.bold,
+//               fontSize: 14,
+//             ),
+//           ),
+//           Expanded(
+//             child: Text(
+//               value,
+//               style: const TextStyle(fontSize: 14),
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _buildWifiPasswordRow(String label, String value) {
+//     return Padding(
+//       padding: const EdgeInsets.only(bottom: 8),
+//       child: Column(
+//         crossAxisAlignment: CrossAxisAlignment.start,
+//         children: [
+//           Text(
+//             '$label: ',
+//             style: const TextStyle(
+//               fontWeight: FontWeight.bold,
+//               fontSize: 14,
+//             ),
+//           ),
+//           const SizedBox(height: 4),
+//           Row(
+//             children: [
+//               Expanded(
+//                 child: Container(
+//                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+//                   decoration: BoxDecoration(
+//                     color: Colors.grey[100],
+//                     borderRadius: BorderRadius.circular(8),
+//                   ),
+//                   child: Text(
+//                     value,
+//                     style: const TextStyle(fontSize: 14),
+//                   ),
+//                 ),
+//               ),
+//               const SizedBox(width: 8),
+//               ElevatedButton.icon(
+//                 onPressed: () {
+//                   Clipboard.setData(ClipboardData(text: value));
+//                   Get.snackbar(
+//                     'Copied',
+//                     'Password copied to clipboard',
+//                     snackPosition: SnackPosition.BOTTOM,
+//                     duration: const Duration(seconds: 2),
+//                   );
+//                 },
+//                 icon: const Icon(Icons.copy, size: 16),
+//                 label: const Text('Copy'),
+//                 style: ElevatedButton.styleFrom(
+//                   backgroundColor: Colors.blue,
+//                   foregroundColor: Colors.white,
+//                   shape: RoundedRectangleBorder(
+//                     borderRadius: BorderRadius.circular(8),
+//                   ),
+//                 ),
+//               ),
+//             ],
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   void _showDeleteConfirmation() {
+//     showDialog(
+//       context: Get.context!,
+//       builder: (BuildContext context) {
+//         return AlertDialog(
+//           title: const Text('Delete Scan'),
+//           content: const Text('Are you sure you want to delete this scan? This action cannot be undone.'),
+//           actions: <Widget>[
+//             TextButton(
+//               onPressed: () => Navigator.of(context).pop(),
+//               child: const Text('Cancel'),
+//             ),
+//             TextButton(
+//               onPressed: () {
+//                 Navigator.of(context).pop();
+//                 controller.deleteScan();
+//               },
+//               child: const Text('Delete', style: TextStyle(color: Colors.red)),
+//             ),
+//           ],
+//         );
+//       },
+//     );
+//   }
+// }
