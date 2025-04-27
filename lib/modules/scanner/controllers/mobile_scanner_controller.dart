@@ -15,13 +15,13 @@ import 'package:image_picker/image_picker.dart';
 class CustomScannerController extends GetxController {
   final StorageService storageService = Get.find<StorageService>();
   final ScannerService scannerService = Get.find<ScannerService>();
-  
+
   final cameraController = Rx<scanner.MobileScannerController?>(null);
   final hasPermission = false.obs;
   final isInitialized = false.obs;
   final torchState = scanner.TorchState.off.obs;
   final isProcessing = false.obs;
-  
+
   DateTime? lastScanTime;
 
   @override
@@ -31,68 +31,71 @@ class CustomScannerController extends GetxController {
   }
 
   Future<void> initializeScanner() async {
-    try {
-      final status = await Permission.camera.request();
-      hasPermission.value = status.isGranted;
+  try {
+    if (isInitialized.value) return; // Prevent re-initialization
 
-      if (hasPermission.value) {
-        cameraController.value = scanner.MobileScannerController(
-          torchEnabled: false,
-          returnImage: true, // Ensure image is returned
-        );
-        await cameraController.value?.start(); // Explicitly start camera
-        isInitialized.value = true;
-        print('Scanner initialized successfully');
-      } else {
-        Get.snackbar(
-          'Permission Denied',
-          'Camera access is required for scanning. Please enable it in settings.',
-          snackPosition: SnackPosition.BOTTOM,
-          duration: const Duration(seconds: 5),
-          mainButton: TextButton(
-            onPressed: openAppSettings,
-            child: const Text('Settings'),
-          ),
-        );
-      }
-    } catch (e) {
-      print('Error initializing scanner: $e');
-      Get.snackbar('Error', 'Failed to initialize scanner', snackPosition: SnackPosition.BOTTOM);
+    final status = await Permission.camera.request();
+    hasPermission.value = status.isGranted;
+
+    if (hasPermission.value) {
+      cameraController.value = scanner.MobileScannerController(
+        torchEnabled: false,
+        returnImage: true, 
+      );
+      await cameraController.value?.start();
+      isInitialized.value = true;
+      print('Scanner initialized successfully');
+    } else {
+      Get.snackbar(
+        'Permission Denied',
+        'Camera access is required for scanning. Please enable it in settings.',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 5),
+        mainButton: TextButton(
+          onPressed: openAppSettings,
+          child: const Text('Settings'),
+        ),
+      );
     }
+  } catch (e) {
+    print('Error initializing scanner: $e');
+    Get.snackbar('Error', 'Failed to initialize scanner', snackPosition: SnackPosition.BOTTOM);
   }
+}
 
   void toggleTorch() {
     if (cameraController.value != null) {
       cameraController.value!.toggleTorch();
-      torchState.value = torchState.value == scanner.TorchState.off 
-          ? scanner.TorchState.on 
-          : scanner.TorchState.off;
+      torchState.value =
+          torchState.value == scanner.TorchState.off
+              ? scanner.TorchState.on
+              : scanner.TorchState.off;
     }
   }
-  
+
   Future<void> processDetection(scanner.BarcodeCapture capture) async {
     final now = DateTime.now();
-    if (lastScanTime != null && 
+    if (lastScanTime != null &&
         now.difference(lastScanTime!).inMilliseconds < 1000) {
       return;
     }
     lastScanTime = now;
-    
+
     if (isProcessing.value || capture.barcodes.isEmpty) {
       print('No barcodes detected or processing: ${capture.barcodes.length}');
       return;
     }
-    
+
     isProcessing.value = true;
     try {
       // Delay to ensure frame capture
       await Future.delayed(const Duration(milliseconds: 100));
       await cameraController.value?.stop();
-      
+
       // Log barcode details
       print('Detected barcodes: ${capture.barcodes.length}');
       print('Barcode values: ${capture.barcodes.map((b) => b.rawValue)}');
-      
+
       // Save the full captured image
       String? imagePath;
       final imageBytes = capture.image;
@@ -118,14 +121,15 @@ class CustomScannerController extends GetxController {
       }
 
       // Create barcode data objects
-      final barcodes = capture.barcodes.map((barcode) {
-        return BarcodeData(
-          value: barcode.rawValue ?? 'Unknown',
-          format: barcode.format.name,
-          corners: null,
-        );
-      }).toList();
-      
+      final barcodes =
+          capture.barcodes.map((barcode) {
+            return BarcodeData(
+              value: barcode.rawValue ?? 'Unknown',
+              format: barcode.format.name,
+              corners: null,
+            );
+          }).toList();
+
       // Create a scan result
       final scanResult = ScanResult(
         id: const Uuid().v4(),
@@ -134,17 +138,21 @@ class CustomScannerController extends GetxController {
         imagePath: imagePath,
         extractedText: barcodes.map((b) => b.value).join('\n'),
       );
-      
+
       // Save the scan result
       await storageService.saveScanResult(scanResult);
       print('Scan saved: ${scanResult.id}');
-      
+
       // Navigate to scan details
       Get.delete<ScanDetailsController>();
       await Get.toNamed('/scan_details', arguments: scanResult.id);
     } catch (e) {
       print('Error processing scan: $e');
-      Get.snackbar('Error', 'Failed to process scan: $e', snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'Error',
+        'Failed to process scan: $e',
+        snackPosition: SnackPosition.BOTTOM,
+      );
     } finally {
       isProcessing.value = false;
       // Delay to stabilize camera restart
@@ -160,7 +168,7 @@ class CustomScannerController extends GetxController {
       }
     }
   }
-  
+
   Future<void> pickImageFromGallery() async {
     try {
       final ImagePicker picker = ImagePicker();
@@ -174,7 +182,7 @@ class CustomScannerController extends GetxController {
         isProcessing.value = true;
         try {
           final imageFile = File(photo.path);
-          
+
           // Save the image to app storage
           final appDir = await getApplicationDocumentsDirectory();
           final barcodeDir = Directory('${appDir.path}/barcode_images');
@@ -193,7 +201,7 @@ class CustomScannerController extends GetxController {
 
           // Process the image with scanner service
           final scanResult = await scannerService.processImage(imageFile);
-          
+
           if (scanResult.barcodes.isEmpty) {
             Get.snackbar(
               'No Barcodes Found',
@@ -211,20 +219,28 @@ class CustomScannerController extends GetxController {
             );
             await storageService.saveScanResult(updatedScanResult);
             print('Gallery scan saved: ${updatedScanResult.id}');
-            
+
             Get.delete<ScanDetailsController>();
             await Get.toNamed('/scan_details', arguments: updatedScanResult.id);
           }
         } catch (e) {
           print('Error processing gallery image: $e');
-          Get.snackbar('Error', 'Failed to process gallery image: $e', snackPosition: SnackPosition.BOTTOM);
+          Get.snackbar(
+            'Error',
+            'Failed to process gallery image: $e',
+            snackPosition: SnackPosition.BOTTOM,
+          );
         } finally {
           isProcessing.value = false;
         }
       }
     } catch (e) {
       print('Error picking image: $e');
-      Get.snackbar('Error', 'Failed to pick image: $e', snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'Error',
+        'Failed to pick image: $e',
+        snackPosition: SnackPosition.BOTTOM,
+      );
       isProcessing.value = false;
     }
   }
