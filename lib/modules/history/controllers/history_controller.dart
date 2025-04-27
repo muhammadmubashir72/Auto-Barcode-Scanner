@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:scanner_app/data/models/scan_result.dart';
 import 'package:scanner_app/data/services/storage_service.dart';
+import 'package:scanner_app/utils/scan_utils.dart';
 import 'package:share_plus/share_plus.dart';
 
 class HistoryController extends GetxController {
@@ -12,6 +13,7 @@ class HistoryController extends GetxController {
   final isLoading = false.obs;
   final searchQuery = ''.obs;
   final filteredScans = <ScanResult>[].obs;
+  final filterType = 'all'.obs; // New: Tracks current filter type
   
   // Selection mode
   final isSelectionMode = false.obs;
@@ -22,8 +24,8 @@ class HistoryController extends GetxController {
     super.onInit();
     loadScans();
     
-    // Set up reaction for search
-    ever(searchQuery, (_) {
+    // Set up reactions for search and filter
+    everAll([searchQuery, filterType], (_) {
       _filterScans();
     });
   }
@@ -43,22 +45,31 @@ class HistoryController extends GetxController {
   }
 
   void _filterScans() {
-    if (searchQuery.value.isEmpty) {
-      filteredScans.value = scans;
-    } else {
+    var result = scans.toList();
+
+    // Apply search query filter
+    if (searchQuery.value.isNotEmpty) {
       final query = searchQuery.value.toLowerCase();
-      filteredScans.value = scans.where((scan) {
-        // Search in barcode values
+      result = result.where((scan) {
         final barcodeMatch = scan.barcodes.any((barcode) => 
           barcode.value.toLowerCase().contains(query));
-        
-        // Search in extracted text if available
         final textMatch = scan.extractedText != null && 
           scan.extractedText!.toLowerCase().contains(query);
-        
         return barcodeMatch || textMatch;
       }).toList();
     }
+
+    // Apply type filter
+    if (filterType.value != 'all') {
+      result = result.where((scan) {
+        return scan.barcodes.any((barcode) {
+          final scanType = ScanUtils.getScanType(barcode);
+          return scanType == filterType.value;
+        });
+      }).toList();
+    }
+
+    filteredScans.value = result;
   }
 
   void updateSearchQuery(String query) {
@@ -67,6 +78,10 @@ class HistoryController extends GetxController {
 
   void clearSearch() {
     searchQuery.value = '';
+  }
+
+  void setFilterType(String type) {
+    filterType.value = type;
   }
 
   void goToScanDetails(String id) {
@@ -102,7 +117,6 @@ class HistoryController extends GetxController {
       selectedScans.add(id);
     }
     
-    // If no items are selected, exit selection mode
     if (selectedScans.isEmpty) {
       isSelectionMode.value = false;
     }
@@ -112,7 +126,6 @@ class HistoryController extends GetxController {
     if (selectedScans.isEmpty) return;
     
     try {
-      // Show confirmation dialog
       final confirmed = await Get.dialog<bool>(
         AlertDialog(
           title: const Text('Delete Selected Scans'),
@@ -132,12 +145,10 @@ class HistoryController extends GetxController {
       
       if (confirmed != true) return;
       
-      // Delete all selected scans
       for (final id in selectedScans) {
         await storageService.deleteScan(id);
       }
       
-      // Reload scans and exit selection mode
       await loadScans();
       cancelSelection();
       
@@ -152,7 +163,6 @@ class HistoryController extends GetxController {
     if (selectedScans.isEmpty) return;
     
     try {
-      // Get all selected scan results
       final selectedResults = <ScanResult>[];
       for (final id in selectedScans) {
         final scan = await storageService.getScanById(id);
@@ -166,10 +176,7 @@ class HistoryController extends GetxController {
         return;
       }
       
-      // Prepare text to share
       String shareText = 'Barcode Scans:\n\n';
-      
-      // Prepare images to share
       final images = <XFile>[];
       
       for (int i = 0; i < selectedResults.length; i++) {
@@ -182,13 +189,11 @@ class HistoryController extends GetxController {
         }
         shareText += '\n';
         
-        // Add image if available
         if (scan.imagePath != null) {
           images.add(XFile(scan.imagePath!));
         }
       }
       
-      // Share
       if (images.isNotEmpty) {
         await Share.shareXFiles(
           images,
@@ -198,7 +203,6 @@ class HistoryController extends GetxController {
         await Share.share(shareText);
       }
       
-      // Exit selection mode after sharing
       cancelSelection();
     } catch (e) {
       print('Error sharing selected scans: $e');

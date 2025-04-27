@@ -75,8 +75,6 @@ class MobileScannerView extends GetView<CustomScannerController> {
         MobileScanner(
           controller: controller.cameraController.value!,
           onDetect: controller.processDetection,
-          // The overlay is now part of the MobileScanner widget in newer versions
-          // or you may need to create your own overlay
         ),
         
         // Custom overlay
@@ -175,7 +173,6 @@ class MobileScannerView extends GetView<CustomScannerController> {
   }
 }
 
-// Custom overlay painter to replace MobileScannerOverlay
 class ScannerOverlayPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -204,7 +201,6 @@ class ScannerOverlayPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     
-    // Cut out the scan area from the background
     final finalPath = Path.combine(
       PathOperation.difference,
       backgroundPath,

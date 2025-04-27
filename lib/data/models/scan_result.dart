@@ -110,4 +110,6 @@ class Point {
   String toJson() => json.encode(toMap());
 
   factory Point.fromJson(String source) => Point.fromMap(json.decode(source));
+
 }
+
