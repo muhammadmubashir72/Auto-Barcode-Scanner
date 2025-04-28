@@ -128,10 +128,7 @@ class BarcodeHomeView extends GetView<BarcodeHomeController> {
               const SizedBox(height: 4),
               Text(
                 description,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.black,
-                ),
+                style: const TextStyle(fontSize: 12, color: Colors.black),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -223,10 +220,7 @@ class BarcodeHomeView extends GetView<BarcodeHomeController> {
           const SizedBox(height: 8),
           const Text(
             'Tap the scan button to get started',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.black,
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.black),
           ),
         ],
       ),
@@ -234,11 +228,18 @@ class BarcodeHomeView extends GetView<BarcodeHomeController> {
   }
 
   Widget _buildScanItem(
-      String id, DateTime timestamp, String value, String format, int serialNumber) {
+    String id,
+    DateTime timestamp,
+    String value,
+    String format,
+    int serialNumber,
+  ) {
     final dateFormat = DateFormat('MMM d, yyyy • h:mm a');
 
     IconData iconData;
-    final scanType = ScanUtils.getScanType(BarcodeData(value: value, format: format));
+    final scanType = ScanUtils.getScanType(
+      BarcodeData(value: value, format: format),
+    );
     switch (scanType) {
       case 'wifi':
         iconData = Icons.wifi;
@@ -314,19 +315,12 @@ class BarcodeHomeView extends GetView<BarcodeHomeController> {
                     const SizedBox(height: 4),
                     Text(
                       dateFormat.format(timestamp),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.black,
-                      ),
+                      style: const TextStyle(fontSize: 12, color: Colors.black),
                     ),
                   ],
                 ),
               ),
-              const Icon(
-                Icons.chevron_right,
-                size: 16,
-                color: Colors.black,
-              ),
+              const Icon(Icons.chevron_right, size: 16, color: Colors.black),
             ],
           ),
         ),

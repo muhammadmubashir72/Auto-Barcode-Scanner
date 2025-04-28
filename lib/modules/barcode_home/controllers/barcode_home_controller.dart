@@ -22,22 +22,43 @@ class BarcodeHomeController extends GetxController {
     loadRecentScans();
   }
 
-  Future<void> loadRecentScans() async {
-    isLoading.value = true;
-    try {
-      final allScans = await storageService.getAllScans();
-      recentScans.value = allScans
-          .where((scan) => scan != null) // Filter out null scans (optional, depends on data)
-          .toList()
-        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      print('Loaded ${recentScans.length} recent scans: ${recentScans.map((s) => s.id).toList()}');
-    } catch (e) {
-      print('Error loading recent scans: $e');
-      ScanUtils.showErrorSnackbar('Error', 'Failed to load recent scans');
-    } finally {
-      isLoading.value = false;
-    }
+Future<void> saveScanAndUpdate(ScanResult newScan) async {
+  try {
+    // Save the scan result to the database
+    await storageService.saveScanResult(newScan);
+    print('Scan saved with ID: ${newScan.id}');
+    
+    // Add a small delay to allow the scan to be saved
+    await Future.delayed(Duration(milliseconds: 300));
+
+    // Immediately refresh the recent scans list after saving
+    recentScans.insert(0, newScan); // Insert the new scan at the top of the list
+    update(); // Notify the UI to refresh
+    
+  } catch (e) {
+    print('Error saving scan: $e');
+    ScanUtils.showErrorSnackbar('Error', 'Failed to save the scan');
   }
+}
+
+Future<void> loadRecentScans() async {
+  isLoading.value = true;
+  try {
+    final allScans = await storageService.getAllScans();
+    recentScans.value = allScans
+        .where((scan) => scan != null) // Filter out null scans (optional)
+        .toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp)); // Sort by timestamp
+
+    print('Loaded ${recentScans.length} recent scans: ${recentScans.map((s) => s.id).toList()}');
+  } catch (e) {
+    print('Error loading recent scans: $e');
+    ScanUtils.showErrorSnackbar('Error', 'Failed to load recent scans');
+  } finally {
+    isLoading.value = false;
+  }
+}
+
 
   Future<void> _navigateAndRefresh(String routeName, {dynamic arguments}) async {
     final result = await Get.toNamed(routeName, arguments: arguments);
