@@ -47,35 +47,79 @@ class ScanDetailsController extends GetxController {
   Future<void> saveImageToGallery(String imagePath) async {
     try {
       isSavingToGallery.value = true;
+
       final file = File(imagePath);
+
+      // Check if the file exists
       if (!await file.exists()) {
         Get.snackbar('Error', 'Image file not found');
         return;
       }
 
+      // Request permissions for storage and photos
       if (Platform.isAndroid || Platform.isIOS) {
         final storagePermission = await Permission.storage.request();
         final photosPermission = await Permission.photos.request();
 
+        // If permission is not granted, show a snackbar and return
         if (!storagePermission.isGranted || !photosPermission.isGranted) {
           Get.snackbar('Error', 'Permission denied');
           return;
         }
       }
 
+      // Try to save the image
       final result = await ImageGallerySaverPlus.saveFile(imagePath);
+
+      // Check if saving was successful
       if (result['isSuccess'] == true) {
         Get.snackbar('Success', 'Image saved to gallery');
       } else {
+        // If saving failed, show an error message
         Get.snackbar('Error', 'Failed to save image');
       }
     } catch (e) {
+      // Log and show any error that occurs during saving the image
       Get.log('Error saving image: $e', isError: true);
       Get.snackbar('Error', 'Failed to save image');
     } finally {
+      // Set saving flag to false after the operation is completed
       isSavingToGallery.value = false;
     }
   }
+
+  // Future<void> saveImageToGallery(String imagePath) async {
+  //   try {
+  //     isSavingToGallery.value = true;
+  //     final file = File(imagePath);
+  //     if (!await file.exists()) {
+  //       Get.snackbar('Error', 'Image file not found');
+  //       return;
+  //     }
+
+  //     if (Platform.isAndroid || Platform.isIOS) {
+  //       final storagePermission = await Permission.storage.request();
+  //       final photosPermission = await Permission.photos.request();
+
+  //       if (!storagePermission.isGranted || !photosPermission.isGranted) {
+  //         Get.snackbar('Error', 'Permission denied');
+  //         return;
+  //       }
+  //     }
+
+  //     final result = await ImageGallerySaverPlus.saveFile(imagePath);
+  //     if (result['isSuccess'] == true) {
+  //       Get.snackbar('Success', 'Image saved to gallery');
+  //     } else {
+  //       Get.snackbar('Error', 'Failed to save image');
+  //     }
+  //   } catch (e) {
+  //     Get.log('Error saving image: $e', isError: true);
+  //     Get.snackbar('Error', 'Failed to save image');
+  //   } finally {
+  //     isSavingToGallery.value = false;
+  //   }
+  // }
 
   Future<void> deleteScan() async {
     if (scanResult.value == null) return;
