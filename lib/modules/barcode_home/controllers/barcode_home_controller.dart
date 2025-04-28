@@ -21,35 +21,80 @@ class BarcodeHomeController extends GetxController {
     // Refresh scans when the view is fully loaded or revisited
     loadRecentScans();
   }
-
 Future<void> saveScanAndUpdate(ScanResult newScan) async {
   try {
-    // Save the scan result to the database
     await storageService.saveScanResult(newScan);
     print('Scan saved with ID: ${newScan.id}');
-    
-    // Add a small delay to allow the scan to be saved
-    await Future.delayed(Duration(milliseconds: 300));
-
-    // Immediately refresh the recent scans list after saving
-    recentScans.insert(0, newScan); // Insert the new scan at the top of the list
-    update(); // Notify the UI to refresh
-    
+    await loadRecentScans();
+    recentScans.refresh(); // Ensure UI updates
   } catch (e) {
     print('Error saving scan: $e');
     ScanUtils.showErrorSnackbar('Error', 'Failed to save the scan');
   }
 }
+  // Future<void> saveScanAndUpdate(ScanResult newScan) async {
+  //   try {
+  //     await storageService.saveScanResult(newScan);
+  //     await Future.delayed(Duration(milliseconds: 300));
+  //     await loadRecentScans(); // YEH LAGAO
+  //     update(); // UI refresh
+  //   } catch (e) {
+  //     print('Error saving scan: $e');
+  //     ScanUtils.showErrorSnackbar('Error', 'Failed to save the scan');
+  //   }
+  // }
+
+  // Future<void> saveScanAndUpdate(ScanResult newScan) async {
+  //   try {
+  //     // Save the scan result to the database
+  //     await storageService.saveScanResult(newScan);
+  //     print('Scan saved with ID: ${newScan.id}');
+
+  //     // Add a small delay to allow the scan to be saved
+  //     await Future.delayed(Duration(milliseconds: 300));
+
+  //     // Immediately refresh the recent scans list after saving
+  //     recentScans.insert(0, newScan); // Insert the new scan at the top of the list
+  //     update(); // Notify the UI to refresh
+
+  //   } catch (e) {
+  //     print('Error saving scan: $e');
+  //     ScanUtils.showErrorSnackbar('Error', 'Failed to save the scan');
+  //   }
+  // }
+
+  // Future<void> loadRecentScans() async {
+  //   isLoading.value = true;
+  //   try {
+  //     final allScans = await storageService.getAllScans();
+  //     recentScans.value =
+  //         allScans
+  //             .where((scan) => scan != null) // Filter out null scans (optional)
+  //             .toList()
+  //           ..sort(
+  //             (a, b) => b.timestamp.compareTo(a.timestamp),
+  //           ); // Sort by timestamp
+
+  //     print(
+  //       'Loaded ${recentScans.length} recent scans: ${recentScans.map((s) => s.id).toList()}',
+  //     );
+  //   } catch (e) {
+  //     print('Error loading recent scans: $e');
+  //     ScanUtils.showErrorSnackbar('Error', 'Failed to load recent scans');
+  //   } finally {
+  //     isLoading.value = false;
+  //   }
+  // }
 
 Future<void> loadRecentScans() async {
   isLoading.value = true;
   try {
     final allScans = await storageService.getAllScans();
     recentScans.value = allScans
-        .where((scan) => scan != null) // Filter out null scans (optional)
+        .where((scan) => scan != null)
         .toList()
-      ..sort((a, b) => b.timestamp.compareTo(a.timestamp)); // Sort by timestamp
-
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    recentScans.refresh(); // Force UI update
     print('Loaded ${recentScans.length} recent scans: ${recentScans.map((s) => s.id).toList()}');
   } catch (e) {
     print('Error loading recent scans: $e');
@@ -59,15 +104,29 @@ Future<void> loadRecentScans() async {
   }
 }
 
+Future<void> _navigateAndRefresh(String routeName, {dynamic arguments}) async {
+  final result = await Get.toNamed(routeName, arguments: arguments);
+  print('$routeName returned result: $result');
 
-  Future<void> _navigateAndRefresh(String routeName, {dynamic arguments}) async {
-    final result = await Get.toNamed(routeName, arguments: arguments);
-    // Always refresh scans after any scan attempt or navigation
-    print('$routeName returned result: $result');
-    if (result == true) {
-      loadRecentScans();
-    }
+  // Always refresh the scans list
+  await loadRecentScans();
+
+  // If the result is a scan ID (String), navigate to scan details
+  if (result is String) {
+    await Get.toNamed('/scan_details', arguments: result);
   }
+}
+  // Future<void> _navigateAndRefresh(
+  //   String routeName, {
+  //   dynamic arguments,
+  // }) async {
+  //   final result = await Get.toNamed(routeName, arguments: arguments);
+  //   // Always refresh scans after any scan attempt or navigation
+  //   print('$routeName returned result: $result');
+  //   if (result == true) {
+  //     loadRecentScans();
+  //   }
+  // }
 
   void goToScan() async {
     await _navigateAndRefresh('/scanner');
@@ -81,7 +140,6 @@ Future<void> loadRecentScans() async {
     await _navigateAndRefresh('/scan_details', arguments: id);
   }
 }
-
 
 // import 'package:get/get.dart';
 // import 'package:scanner_app/data/models/scan_result.dart';

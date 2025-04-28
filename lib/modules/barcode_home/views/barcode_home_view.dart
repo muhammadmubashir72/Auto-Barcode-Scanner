@@ -165,7 +165,8 @@ class BarcodeHomeView extends GetView<BarcodeHomeController> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: Obx(() {
+            child:
+             Obx(() {
               if (controller.isLoading.value) {
                 return const Center(
                   child: CircularProgressIndicator(color: Colors.red),
