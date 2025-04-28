@@ -169,6 +169,9 @@ class CustomScannerController extends GetxController {
     }
   }
 
+
+
+
   Future<void> pickImageFromGallery() async {
     try {
       final ImagePicker picker = ImagePicker();
