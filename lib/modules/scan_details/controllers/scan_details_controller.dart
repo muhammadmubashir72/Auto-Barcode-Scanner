@@ -39,7 +39,9 @@ class ScanDetailsController extends GetxController {
         if (result.imagePath != null && File(result.imagePath!).existsSync()) {
           print('Image found: ${result.imagePath}');
         } else {
-          print('Image path is null or file does not exist: ${result.imagePath}');
+          print(
+            'Image path is null or file does not exist: ${result.imagePath}',
+          );
         }
       }
     } catch (e) {
@@ -54,10 +56,9 @@ class ScanDetailsController extends GetxController {
     try {
       isSavingToGallery.value = true;
       if (Platform.isAndroid) {
-        final status = await [
-          Permission.storage,
-          Permission.photos,
-        ].request().then((result) => result.values.any((status) => status.isGranted));
+        final status = await [Permission.storage, Permission.photos]
+            .request()
+            .then((result) => result.values.any((status) => status.isGranted));
         if (!status) {
           Get.snackbar('Error', 'Storage or photos permission denied');
           return;
@@ -112,12 +113,17 @@ class ScanDetailsController extends GetxController {
           shareText += '${barcode.value} (${barcode.format})\n';
         }
       } else if (isVCard(barcode.value)) {
-        final contactData = parseMECARD(barcode.value) ?? parseVCard(barcode.value);
+        final contactData =
+            parseMECARD(barcode.value) ?? parseVCard(barcode.value);
         shareText += 'Contact Details:\n';
-        if (contactData.containsKey('name')) shareText += 'Name: ${contactData['name']}\n';
-        if (contactData.containsKey('email')) shareText += 'Email: ${contactData['email']}\n';
-        if (contactData.containsKey('phone')) shareText += 'Phone: ${contactData['phone']}\n';
-        if (contactData.containsKey('url')) shareText += 'URL: ${contactData['url']}\n';
+        if (contactData.containsKey('name'))
+          shareText += 'Name: ${contactData['name']}\n';
+        if (contactData.containsKey('email'))
+          shareText += 'Email: ${contactData['email']}\n';
+        if (contactData.containsKey('phone'))
+          shareText += 'Phone: ${contactData['phone']}\n';
+        if (contactData.containsKey('url'))
+          shareText += 'URL: ${contactData['url']}\n';
       } else {
         shareText += '${barcode.value} (${barcode.format})\n';
       }
@@ -146,12 +152,17 @@ class ScanDetailsController extends GetxController {
           text += '${barcode.value}\n';
         }
       } else if (isVCard(barcode.value)) {
-        final contactData = parseMECARD(barcode.value) ?? parseVCard(barcode.value);
+        final contactData =
+            parseMECARD(barcode.value) ?? parseVCard(barcode.value);
         text += 'Contact Details:\n';
-        if (contactData.containsKey('name')) text += 'Name: ${contactData['name']}\n';
-        if (contactData.containsKey('email')) text += 'Email: ${contactData['email']}\n';
-        if (contactData.containsKey('phone')) text += 'Phone: ${contactData['phone']}\n';
-        if (contactData.containsKey('url')) text += 'URL: ${contactData['url']}\n';
+        if (contactData.containsKey('name'))
+          text += 'Name: ${contactData['name']}\n';
+        if (contactData.containsKey('email'))
+          text += 'Email: ${contactData['email']}\n';
+        if (contactData.containsKey('phone'))
+          text += 'Phone: ${contactData['phone']}\n';
+        if (contactData.containsKey('url'))
+          text += 'URL: ${contactData['url']}\n';
       } else {
         text += '${barcode.value}\n';
       }
@@ -162,7 +173,8 @@ class ScanDetailsController extends GetxController {
 
   Future<void> openUrl(String url) async {
     String formattedUrl = url.trim();
-    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+    if (!formattedUrl.startsWith('http://') &&
+        !formattedUrl.startsWith('https://')) {
       formattedUrl = 'https://$formattedUrl';
     }
     try {
